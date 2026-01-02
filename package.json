@@ -1,0 +1,7 @@
+{
+  "name": "ai-proxy",
+  "type": "module",
+  "dependencies": {
+    "undici": "^6.0.0"
+  }
+}
