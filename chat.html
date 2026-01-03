@@ -1,195 +1,286 @@
-```html
-<!DOCTYPE html>
-<html lang="zh">
+<!doctype html>
+<html lang="zh-CN">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>聊天界面</title>
+  <meta charset="utf-8" />
+  <title>AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
+    :root {
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --border: #e5e5e5;
+      --text: #111;
+      --muted: #777;
+      --primary: #10a37f;
+      --bubble-user: #dff5ec;
+      --bubble-bot: #f2f2f2;
     }
-
+    * { box-sizing: border-box; }
     body {
-      font-family: "Microsoft YaHei", sans-serif;
-      background-color: #f4f6f9;
-      display: flex;
-      justify-content: center;
-      align-items: center;
+      margin: 0;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
       height: 100vh;
-    }
-
-    .chat-container {
-      width: 100%;
-      max-width: 500px;
-      height: 80vh;
-      border-radius: 12px;
-      overflow: hidden;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
       display: flex;
       flex-direction: column;
-      background-color: white;
     }
 
-    .chat-header {
-      background-color: #007bff;
-      color: white;
-      padding: 15px;
-      text-align: center;
-      font-size: 1.2em;
-      font-weight: bold;
-    }
-
-    .chat-messages {
-      flex: 1;
-      padding: 15px;
-      overflow-y: auto;
+    /* 顶部导航 */
+    .topbar {
+      height: 56px;
+      background: white;
+      border-bottom: 1px solid var(--border);
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      background-color: #f9f9fb;
-    }
-
-    .message {
-      max-width: 80%;
-      padding: 10px 14px;
-      border-radius: 18px;
-      line-height: 1.5;
-      word-wrap: break-word;
-    }
-
-    .user-message {
-      align-self: flex-end;
-      background-color: #007bff;
-      color: white;
-      border-bottom-right-radius: 4px;
-    }
-
-    .bot-message {
-      align-self: flex-start;
-      background-color: #e5e5ea;
-      color: black;
-      border-bottom-left-radius: 4px;
-    }
-
-    .chat-input-area {
-      display: flex;
-      padding: 10px;
-      border-top: 1px solid #eee;
-      background-color: white;
-    }
-
-    #message-input {
-      flex: 1;
-      padding: 12px;
-      border: 1px solid #ddd;
-      border-radius: 24px;
-      outline: none;
-      font-size: 1em;
-    }
-
-    #send-button {
-      margin-left: 10px;
+      align-items: center;
+      justify-content: space-between;
       padding: 0 20px;
-      background-color: #007bff;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .topbar-title {
+      font-weight: 600;
+      font-size: 17px;
+    }
+    .topbar-right {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    /* 主体布局 */
+    .container {
+      flex: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-box {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 20px;
+    }
+
+    /* 消息气泡 */
+    .msg {
+      margin: 14px 0;
+      display: flex;
+    }
+    .msg.user { justify-content: flex-end; }
+    .msg.bot { justify-content: flex-start; }
+
+    .bubble {
+      max-width: 75%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+    .user .bubble {
+      background: var(--bubble-user);
+      border: 1px solid #cde7dc;
+    }
+    .bot .bubble {
+      background: var(--bubble-bot);
+      border: 1px solid #e6e6e6;
+      position: relative;
+    }
+
+    /* 复制按钮 */
+    .copy-btn {
+      position: absolute;
+      right: -5px;
+      top: -8px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
+
+    /* 底部输入框 */
+    .composer {
+      display: flex;
+      gap: 10px;
+      padding: 16px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      min-height: 60px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+    }
+    .btn-primary {
+      background: var(--primary);
       color: white;
       border: none;
-      border-radius: 24px;
+      padding: 0 18px;
+      border-radius: 12px;
       cursor: pointer;
-      font-size: 1em;
-      transition: background 0.3s;
+      font-weight: 500;
     }
 
-    #send-button:hover {
-      background-color: #0056b3;
-    }
-
-    /* 滚动条美化 */
-    .chat-messages::-webkit-scrollbar {
-      width: 6px;
-    }
-    .chat-messages::-webkit-scrollbar-thumb {
-      background-color: #c0c0c0;
-      border-radius: 3px;
+    /* 输入框固定到底部 */
+    .bottom-area {
+      position: sticky;
+      bottom: 0;
+      background: var(--bg);
+      padding-bottom: 10px;
     }
   </style>
 </head>
 <body>
 
-  <div class="chat-container">
-    <div class="chat-header">智能助手</div>
-    <div class="chat-messages" id="messages">
-      <!-- 示例欢迎消息 -->
-      <div class="message bot-message">
-        你好！我是你的智能助手，请问有什么可以帮助你？
-      </div>
+  <!-- 顶部导航 -->
+  <div class="topbar">
+    <div class="topbar-title">AI Chat</div>
+    <div class="topbar-right">
+      <input id="token" type="password" placeholder="访问密码" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);" />
+      <button id="saveToken" class="btn-primary" style="padding:6px 12px;">保存</button>
     </div>
-    <div class="chat-input-area">
-      <input type="text" id="message-input" placeholder="输入消息..." autofocus />
-      <button id="send-button">发送</button>
+  </div>
+
+  <!-- 主容器 -->
+  <div class="container">
+
+    <div id="chat" class="chat-box"></div>
+
+    <!-- 输入框 -->
+    <div class="bottom-area">
+      <div class="composer">
+        <textarea id="input" placeholder="输入你的问题，Enter发送，Shift+Enter换行"></textarea>
+        <button class="btn-primary" id="send">发送</button>
+      </div>
     </div>
   </div>
 
   <script>
-    const messagesContainer = document.getElementById('messages');
-    const messageInput = document.getElementById('message-input');
-    const sendButton = document.getElementById('send-button');
+    const chatEl = document.getElementById('chat');
+    const inputEl = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+    const tokenEl = document.getElementById('token');
+    const saveTokenBtn = document.getElementById('saveToken');
 
-    // 发送消息函数
-    function sendMessage() {
-      const text = messageInput.value.trim();
-      if (!text) return;
+    const SS_TOKEN = "CHAT_ACCESS_TOKEN";
 
-      // 添加用户消息
-      addMessage(text, 'user');
+    // 加载保存的 token
+    tokenEl.value = sessionStorage.getItem(SS_TOKEN) || "";
 
-      // 清空输入框并聚焦
-      messageInput.value = '';
-      
-      // 模拟机器人回复（你可以替换为实际 API 调用）
-      setTimeout(() => {
-        addMessage("这是模拟回复：" + echoChinese(text), 'bot');
-      }, 300);
+    saveTokenBtn.onclick = () => {
+      const v = tokenEl.value.trim();
+      if (!v) return alert("请输入访问密码！");
+      sessionStorage.setItem(SS_TOKEN, v);
+      alert("已保存");
+    };
 
-      // 滚动到底部
-      scrollToBottom();
+    // 添加消息到界面
+    function addMsg(role, text) {
+      const div = document.createElement("div");
+      div.className = "msg " + (role === "user" ? "user" : "bot");
+
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      div.appendChild(bubble);
+
+      // bot 添加复制按钮
+      if (role !== "user") {
+        const copy = document.createElement("button");
+        copy.className = "copy-btn";
+        copy.textContent = "复制";
+        copy.onclick = () => {
+          navigator.clipboard.writeText(bubble.textContent);
+          copy.textContent = "已复制";
+          setTimeout(() => copy.textContent = "复制", 1200);
+        };
+        div.appendChild(copy);
+      }
+
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return bubble;
     }
 
-    // 添加消息到聊天区域
-    function addMessage(text, sender) {
-      const messageDiv = document.createElement('div');
-      messageDiv.classList.add('message');
-      messageDiv.classList.add(sender === 'user' ? 'user-message' : 'bot-message');
-      messageDiv.textContent = text;
-      messagesContainer.appendChild(messageDiv);
-    }
-
-    // 滚动到底部
-    function scrollToBottom() {
-      messagesContainer.scrollTop = messagesContainer.scrollHeight;
-    }
-
-    // 回车发送消息
-    messageInput.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') {
-        sendMessage();
+    // 发送
+    sendBtn.onclick = send;
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        send();
       }
     });
 
-    // 点击发送按钮
-    sendButton.addEventListener('click', sendMessage);
+    async function send() {
+      const text = inputEl.value.trim();
+      if (!text) return;
 
-    // 初始聚焦
-    messageInput.focus();
+      const token = tokenEl.value.trim();
+      if (!token) return alert("请先填写访问密码");
 
-    // 示例：简单中文回声处理（避免英文原样返回太机械）
-    function echoChinese(text) {
-      if (text.includes('你') || text.includes('您')) {
-        return text.replace(/你|您/g, '我') + "。";
+      inputEl.value = "";
+      addMsg("user", text);
+
+      const body = {
+        model: "qwen-plus",
+        messages: [{ role:"user", content:text }],
+        stream: true
+      };
+
+      const resp = await fetch("/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Access-Token": token
+        },
+        body: JSON.stringify(body)
+      });
+
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder("utf-8");
+
+      let buffer = "";
+      let finalText = "";
+
+      const bubble = addMsg("bot", "");
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
+
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
+
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") return;
+
+            try {
+              const json = JSON.parse(data);
+              const piece = json?.choices?.[0]?.delta?.content || "";
+              if (piece) {
+                finalText += piece;
+                bubble.textContent += piece;
+                chatEl.scrollTop = chatEl.scrollHeight;
+              }
+            } catch {}
+          }
+        }
       }
-      return "我明白了，你说的是“" + text + "”。";
     }
   </script>
 
