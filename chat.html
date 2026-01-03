@@ -199,28 +199,33 @@
     }
 
     function addMsg(role, text) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.textContent = text; // 保留换行（配合 CSS）
-      div.appendChild(b);
+  const div = document.createElement('div');
+  div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
 
-      // 助手消息：复制按钮
-      if (role !== 'user') {
-        const copy = document.createElement('button');
-        copy.className = 'copy-btn';
-        copy.textContent = '复制';
-        copy.onclick = () => {
-          navigator.clipboard.writeText(text).then(()=>{ copy.textContent='已复制'; setTimeout(()=>copy.textContent='复制',1200); });
-        };
-        div.appendChild(copy);
-      }
+  const b = document.createElement('div');
+  b.className = 'bubble';
+  b.textContent = text; // 保留换行（配合 CSS）
+  div.appendChild(b);
 
-      chatEl.appendChild(div);
-      chatEl.scrollTop = chatEl.scrollHeight;
-      return b;
-    }
+  // 助手消息：复制按钮（复制实时内容）
+  if (role !== 'user') {
+    const copy = document.createElement('button');
+    copy.className = 'copy-btn';
+    copy.textContent = '复制';
+    copy.onclick = () => {
+      const liveText = b.textContent || '';
+      navigator.clipboard.writeText(liveText).then(()=>{
+        copy.textContent='已复制';
+        setTimeout(()=>copy.textContent='复制',1200);
+      });
+    };
+    div.appendChild(copy);
+  }
+
+  chatEl.appendChild(div);
+  chatEl.scrollTop = chatEl.scrollHeight;
+  return b;
+}
 
     async function typeWrite(el, text, speed=8) {
       el.textContent = '';
@@ -356,51 +361,129 @@
       return;
     }
 
-    const reader = resp.body.getReader();
-    const decoder = new TextDecoder('utf-8');
-    let buffer = '';
-    let finalText = '';
-    let roleEmitted = false;
+   const reader = resp.body.getReader();
+const decoder = new TextDecoder('utf-8');
 
-    // 先画一个空气泡，边读边追加
-    const botBubble = addMsg('assistant', '');
+let buffer = '';
+let finalText = '';
+let doneFlag = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
+// 先画一个空气泡，边读边追加
+const botBubble = addMsg('assistant', '');
 
-      // SSE 分帧：按行切
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
+while (!doneFlag) {
+  const { done, value } = await reader.read();
+  if (done) break;
 
-      for (const line of lines) {
-        const s = line.trim();
-        if (!s) continue;
-        if (!s.startsWith('data:')) continue;
+  buffer += decoder.decode(value, { stream: true });
 
-        const data = s.slice(5).trim(); // 去掉 "data:"
-        if (data === '[DONE]') { buffer = ''; break; }
+  // 统一处理 \r\n
+  buffer = buffer.replace(/\r\n/g, '\n');
 
-        try {
-          const json = JSON.parse(data);
-          const choice = json?.choices?.[0];
-          if (!choice) continue;
+  // SSE 标准分隔：事件以 "\n\n" 分隔
+  const events = buffer.split('\n\n');
+  buffer = events.pop() || '';
 
-          const delta = choice.delta || {};
-          if (delta.role && !roleEmitted) roleEmitted = true;
+  for (const evt of events) {
+    const lines = evt.split('\n');
 
-          const piece = delta.content || '';
-          if (piece) {
-            finalText += piece;
-            botBubble.textContent += piece; // 真正边读边加
-            chatEl.scrollTop = chatEl.scrollHeight;
-          }
-        } catch (e) {
-          console.warn('parse chunk fail:', e, s);
+    for (const line of lines) {
+      const s = line.trim();
+      if (!s.startsWith('data:')) continue;
+
+      const data = s.slice(5).trim();
+      if (!data) continue;
+
+      if (data === '[DONE]') {
+        doneFlag = true;
+        break;
+      }
+
+      try {
+        const json = JSON.parse(data);
+        const choice = json?.choices?.[0];
+        const delta = choice?.delta;
+
+        const piece =
+          delta?.content ??
+          choice?.message?.content ??
+          '';
+
+        if (piece) {
+          finalText += piece;
+          botBubble.textContent += piece;
+          chatEl.scrollTop = chatEl.scrollHeight;
         }
+      } catch (e) {
+        // 忽略心跳/非 JSON/半截 JSON 的情况
       }
     }
+
+    if (doneFlag) break;
+  }
+}
+const reader = resp.body.getReader();
+const decoder = new TextDecoder('utf-8');
+
+let buffer = '';
+let finalText = '';
+let doneFlag = false;
+
+// 先画一个空气泡，边读边追加
+const botBubble = addMsg('assistant', '');
+
+while (!doneFlag) {
+  const { done, value } = await reader.read();
+  if (done) break;
+
+  buffer += decoder.decode(value, { stream: true });
+
+  // 统一处理 \r\n
+  buffer = buffer.replace(/\r\n/g, '\n');
+
+  // SSE 标准分隔：事件以 "\n\n" 分隔
+  const events = buffer.split('\n\n');
+  buffer = events.pop() || '';
+
+  for (const evt of events) {
+    const lines = evt.split('\n');
+
+    for (const line of lines) {
+      const s = line.trim();
+      if (!s.startsWith('data:')) continue;
+
+      const data = s.slice(5).trim();
+      if (!data) continue;
+
+      if (data === '[DONE]') {
+        doneFlag = true;
+        break;
+      }
+
+      try {
+        const json = JSON.parse(data);
+        const choice = json?.choices?.[0];
+        const delta = choice?.delta;
+
+        const piece =
+          delta?.content ??
+          choice?.message?.content ??
+          '';
+
+        if (piece) {
+          finalText += piece;
+          botBubble.textContent += piece;
+          chatEl.scrollTop = chatEl.scrollHeight;
+        }
+      } catch (e) {
+        // 忽略心跳/非 JSON/半截 JSON 的情况
+      }
+    }
+
+    if (doneFlag) break;
+  }
+}
+
 
     // 收尾：落库并更新列表
     chat.messages.push({ role:"user", content:text });
