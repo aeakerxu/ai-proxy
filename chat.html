@@ -9,56 +9,60 @@
     *{box-sizing:border-box}
     body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; margin:0; color:var(--text); background:var(--bg);}
     .app { display:flex; min-height:100vh; }
-    .sidebar {
-      width:260px; border-right:1px solid var(--border); background:#fafafa; padding:12px; display:flex; flex-direction:column; gap:8px;
-    }
+
+    .sidebar { width:260px; border-right:1px solid var(--border); background:#fafafa; padding:12px; display:flex; flex-direction:column; gap:8px; }
     .sidebar h2{font-size:14px;margin:8px 4px;color:#444}
-    .chat-item{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer}
+    .chat-item{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px}
     .chat-item.active{border-color:#000}
-    .sidebar .row{display:flex;gap:8px}
+    .chat-title{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .chat-actions{display:flex; gap:6px}
+    .icon-btn{border:1px solid var(--border); background:#fff; border-radius:8px; padding:4px 6px; cursor:pointer}
+    .icon-btn:hover{background:#f2f2f2}
+
     .btn { padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer }
     .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary) }
-    .btn.icon { display:flex; align-items:center; gap:6px }
     .btn:disabled{opacity:.6;cursor:not-allowed}
+    .row { display:flex; gap:8px }
+    .muted { color:var(--muted); font-size:12px; }
 
-    .main { flex:1; display:flex; flex-direction:column; }
+    .main { flex:1; display:flex; flex-direction:column; min-width:0; }
     .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); background:#fff; position:sticky; top:0; z-index:5}
     .topbar .left, .topbar .right { display:flex; gap:8px; align-items:center }
+    select, input[type="password"] { padding:8px 10px; border-radius:10px; border:1px solid var(--border) }
 
-    .wrap { max-width:900px; margin:0 auto; padding:16px; width:100% }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; }
+    .wrap { max-width:900px; margin:0 auto; padding:12px; width:100% }
+    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; height: calc(100vh - 140px); }
 
-    .chat-box { height:60vh; overflow-y:auto; padding:16px; }
-    .msg { margin:10px 0; line-height:1.7; }
-    .msg .bubble { display:inline-block; padding:10px 12px; border-radius:12px; white-space:pre-wrap; } /* 关键：保留换行 */
+    .chat-box { flex:1; overflow-y:auto; padding:16px; }
+    .msg { margin:10px 0; line-height:1.7; position:relative; }
+    .msg .bubble { display:inline-block; padding:10px 12px; border-radius:12px; white-space:pre-wrap; max-width:100%; }
     .msg.user { text-align:right; }
     .msg.user .bubble { background:#e6f0ff; }
     .msg.bot .bubble { background:#f1f1f1; }
+    .copy-btn{ position:absolute; right:0; top:-6px; font-size:12px; color:#666; cursor:pointer; padding:2px 6px; border-radius:6px; border:1px solid var(--border); background:#fff; }
+    .copy-btn:hover{background:#f2f2f2}
 
     .composer { display:flex; gap:8px; padding:12px; border-top:1px solid var(--border) }
-    textarea { flex:1; resize:vertical; min-height:68px; padding:10px; border-radius:10px; border:1px solid var(--border); }
-    select, input[type="password"] { padding:8px 10px; border-radius:10px; border:1px solid var(--border) }
+    textarea { flex:1; resize:vertical; min-height:68px; padding:10px; border-radius:10px; border:1px solid var(--border); font-size:16px; }
+    .send-btn { min-width:110px }
 
-    .row { display:flex; gap:8px; }
-    .muted { color:var(--muted); font-size:12px; }
-    .hidden { display:none; }
-    .spacer { flex:1 }
-    .arrow { width:0;height:0;border-left:6px solid transparent;border-right:6px solid transparent;border-top:10px solid #fff; }
-    .send-btn { display:flex; align-items:center; gap:8px }
-    .toolbar { display:flex; gap:8px; align-items:center; }
+    @media (max-width: 900px){
+      .sidebar{ display:none; }
+      .card{ height: calc(100vh - 120px); }
+    }
   </style>
 </head>
 <body>
   <div class="app">
 
-    <!-- 左侧：聊天列表 / 功能按钮 -->
+    <!-- 左侧：聊天列表 -->
     <aside class="sidebar">
       <div class="row">
         <button class="btn primary" id="newChatBtn">新建聊天</button>
         <button class="btn" id="exportBtn">导出对话</button>
       </div>
       <div class="row">
-        <button class="btn" id="loginBtn">登录</button>
+        <button class="btn" id="logoutBtn">退出登录</button>
         <button class="btn" id="settingsBtn">设置</button>
       </div>
       <h2>你的聊天</h2>
@@ -68,19 +72,17 @@
     <!-- 右侧：主界面 -->
     <main class="main">
       <div class="topbar">
-        <div class="left toolbar">
+        <div class="left">
           <strong>api.awaker.top</strong>
           <span class="muted">OpenAI 兼容 / 通义</span>
-          <!-- 模型切换 -->
           <label class="muted">模型</label>
           <select id="modelSel">
             <option value="qwen-plus">qwen-plus</option>
             <option value="qwen-max">qwen-max</option>
           </select>
         </div>
-        <div class="right toolbar">
-          <!-- 密码 -->
-          <input id="token" type="password" placeholder="访问密码（一次即可）" />
+        <div class="right">
+          <input id="token" type="password" placeholder="访问密码（此窗口有效）" />
           <button class="btn" id="saveToken">保存密码</button>
         </div>
       </div>
@@ -90,20 +92,18 @@
           <div id="chat" class="chat-box"></div>
           <div class="composer">
             <textarea id="input" placeholder="输入你的问题，Shift+Enter换行，Enter发送"></textarea>
-            <button class="btn primary send-btn" id="send">
-              发送 <span class="arrow"></span>
-            </button>
+            <button class="btn primary send-btn" id="send">发送</button>
           </div>
         </div>
         <div class="muted" style="margin-top:8px">
-          说明：调用 <code>/api/v1/chat/completions</code>，前端“逐字显示”为伪流式（体验更好）。日后可切换服务端真流式。
+          说明：当前为“伪流式”（前端逐字显示）。如需真流式（SSE），第二阶段改后端即可。
         </div>
       </div>
     </main>
   </div>
 
   <script>
-    // ========== 基础 DOM ==========
+    // === DOM ===
     const chatEl = document.getElementById('chat');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
@@ -113,47 +113,71 @@
     const chatListEl = document.getElementById('chatList');
     const newChatBtn = document.getElementById('newChatBtn');
     const exportBtn = document.getElementById('exportBtn');
-    const loginBtn = document.getElementById('loginBtn');
+    const logoutBtn = document.getElementById('logoutBtn');
     const settingsBtn = document.getElementById('settingsBtn');
 
-    // ========== 本地数据结构 ==========
-    // chats: [{id, title, messages:[{role, content}], created}]
-    const LS_KEY = 'AIOPS_CHATS';
-    const LS_TOKEN = 'CHAT_ACCESS_TOKEN';
+    // === 存储键 ===
+    const LS_CHATS = 'AIOPS_CHATS';
     const LS_MODEL = 'AIOPS_MODEL';
-    let chats = JSON.parse(localStorage.getItem(LS_KEY) || '[]');
-    let currentId = null;
+    // 密码默认存 sessionStorage：关闭页面即失效（更安全）
+    const SS_TOKEN = 'CHAT_ACCESS_TOKEN';
 
-    // 默认系统提示
+    // === 数据 ===
+    let chats = loadChats();
+    let currentId = chats[0]?.id || null;
     const systemMsg = { role: "system", content: "你是一个有帮助的中文助手。" };
 
     function uuid() { return 'c'+Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
-    function createChat() {
-      const id = uuid();
-      const chat = { id, title: "新的聊天", messages: [systemMsg], created: Date.now() };
-      chats.unshift(chat);
-      currentId = id;
-      persist();
-      renderList();
-      renderChat();
+    function loadChats() {
+      try {
+        const raw = localStorage.getItem(LS_CHATS);
+        return raw ? JSON.parse(raw) : [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
+      } catch (e) {
+        console.error("parse chats failed", e);
+        return [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
+      }
     }
 
     function getCurrent() { return chats.find(c => c.id === currentId); }
 
     function persist() {
-      localStorage.setItem(LS_KEY, JSON.stringify(chats));
+      localStorage.setItem(LS_CHATS, JSON.stringify(chats));
       localStorage.setItem(LS_MODEL, modelSel.value);
     }
 
     function renderList() {
       chatListEl.innerHTML = '';
       chats.forEach(c => {
-        const div = document.createElement('div');
-        div.className = 'chat-item' + (c.id===currentId ? ' active':'');
-        div.textContent = c.title || '未命名对话';
-        div.onclick = () => { currentId = c.id; renderList(); renderChat(); };
-        chatListEl.appendChild(div);
+        const item = document.createElement('div');
+        item.className = 'chat-item' + (c.id===currentId ? ' active':'');
+        const title = document.createElement('div');
+        title.className = 'chat-title';
+        title.textContent = c.title || '未命名对话';
+        title.ondblclick = () => {
+          const val = prompt('修改标题：', c.title || '');
+          if (val !== null) { c.title = val.trim() || c.title; persist(); renderList(); }
+        };
+        const actions = document.createElement('div');
+        actions.className = 'chat-actions';
+        const del = document.createElement('button');
+        del.className = 'icon-btn';
+        del.title = '删除';
+        del.textContent = '🗑';
+        del.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm('确定删除该对话？')) {
+            chats = chats.filter(x => x.id !== c.id);
+            if (currentId === c.id) currentId = chats[0]?.id || null;
+            persist(); renderList(); renderChat();
+          }
+        };
+        actions.appendChild(del);
+
+        item.onclick = () => { currentId = c.id; renderList(); renderChat(); };
+        item.appendChild(title);
+        item.appendChild(actions);
+        chatListEl.appendChild(item);
       });
       if (!chats.length) {
         const d = document.createElement('div');
@@ -164,10 +188,10 @@
     }
 
     function renderChat() {
-      const c = getCurrent();
       chatEl.innerHTML = '';
+      const c = getCurrent();
       if (!c) return;
-      c.messages.filter(m => m.role!=="system").forEach(m => addMsg(m.role, m.content));
+      c.messages.filter(m => m.role !== "system").forEach(m => addMsg(m.role, m.content));
     }
 
     function addMsg(role, text) {
@@ -175,15 +199,26 @@
       div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
       const b = document.createElement('div');
       b.className = 'bubble';
-      b.textContent = text;              // 配合 CSS white-space: pre-wrap 保留换行
+      b.textContent = text; // 保留换行（配合 CSS）
       div.appendChild(b);
+
+      // 助手消息：复制按钮
+      if (role !== 'user') {
+        const copy = document.createElement('button');
+        copy.className = 'copy-btn';
+        copy.textContent = '复制';
+        copy.onclick = () => {
+          navigator.clipboard.writeText(text).then(()=>{ copy.textContent='已复制'; setTimeout(()=>copy.textContent='复制',1200); });
+        };
+        div.appendChild(copy);
+      }
+
       chatEl.appendChild(div);
       chatEl.scrollTop = chatEl.scrollHeight;
-      return b; // 返回气泡，做“伪流式”渲染
+      return b;
     }
 
-    // 伪流式：逐字显示
-    async function typeWrite(el, text, speed=10) {
+    async function typeWrite(el, text, speed=8) {
       el.textContent = '';
       for (let i=0;i<text.length;i++){
         el.textContent += text[i];
@@ -191,38 +226,39 @@
       }
     }
 
-    // ========== 初始化 ==========
-    // token/model 回填
-    tokenEl.value = localStorage.getItem(LS_TOKEN) || '';
+    // 初始回填
+    tokenEl.value = sessionStorage.getItem(SS_TOKEN) || '';
     modelSel.value = localStorage.getItem(LS_MODEL) || 'qwen-plus';
+    renderList(); if (currentId) renderChat();
 
-    if (!chats.length) { createChat(); }
-    else { currentId = chats[0].id; renderList(); renderChat(); }
+    // 事件
+    document.getElementById('newChatBtn').onclick = () => {
+      const id = uuid();
+      chats.unshift({ id, title:"新的聊天", messages:[systemMsg], created:Date.now() });
+      currentId = id; persist(); renderList(); renderChat();
+    };
 
-    // ========== 事件 ==========
+    document.getElementById('exportBtn').onclick = () => {
+      const c = getCurrent(); if (!c) return;
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c,null,2));
+      const a = document.createElement('a');
+      a.href = dataStr; a.download = (c.title || 'chat') + '.json'; a.click();
+    };
+
+    document.getElementById('logoutBtn').onclick = () => {
+      sessionStorage.removeItem(SS_TOKEN);
+      tokenEl.value = '';
+      alert('已清除当前窗口的访问密码');
+    };
+
+    settingsBtn.onclick = () => alert('设置占位：后续可添加主题 / 快捷键 / 温度等参数');
+
     saveTokenBtn.onclick = () => {
       const v = tokenEl.value.trim();
       if (!v) return alert('请输入访问密码');
-      localStorage.setItem(LS_TOKEN, v);
-      alert('已保存');
+      sessionStorage.setItem(SS_TOKEN, v);
+      alert('已保存（仅当前窗口有效）');
     };
-
-    newChatBtn.onclick = () => {
-      createChat();
-    };
-
-    exportBtn.onclick = () => {
-      const c = getCurrent();
-      if (!c) return;
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c,null,2));
-      const a = document.createElement('a');
-      a.href = dataStr;
-      a.download = (c.title || 'chat') + '.json';
-      a.click();
-    };
-
-    loginBtn.onclick = () => alert('登录占位：如需账号体系，后续可接入。');
-    settingsBtn.onclick = () => alert('设置占位：可加入主题/快捷键/温度等参数。');
 
     modelSel.onchange = () => persist();
 
@@ -234,48 +270,44 @@
     });
     sendBtn.onclick = () => send();
 
-    // ========== 发送逻辑 ==========
     async function send() {
       const text = inputEl.value.trim();
       if (!text) return;
 
-      const token = (tokenEl.value || localStorage.getItem(LS_TOKEN) || '').trim();
+      const token = (tokenEl.value || sessionStorage.getItem(SS_TOKEN) || '').trim();
       if (!token) return alert('请先填写并保存访问密码');
 
-      const chat = getCurrent();
-      if (!chat) return;
+      const chat = getCurrent(); if (!chat) return;
 
       inputEl.value = '';
-      const userBubble = addMsg('user', text);
+      addMsg('user', text);
 
-      // 更新标题（首条用户消息）
+      // 首条消息更新标题
       if (!chat.title || chat.title === '新的聊天') {
         chat.title = text.slice(0, 20);
       }
 
       const model = modelSel.value || 'qwen-plus';
-      const body = {
-        model,
-        messages: [...chat.messages, { role:"user", content:text }],
-        temperature: 0.7
-      };
+      const body = { model, messages: [...chat.messages, { role:"user", content:text }], temperature: 0.7 };
 
+      // Loading 状态
       sendBtn.disabled = true;
+      const oldSendText = sendBtn.textContent;
+      sendBtn.textContent = '思考中…';
 
       try {
         const resp = await fetch('/api/v1/chat/completions', {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Access-Token': token
-          },
+          headers: { 'Content-Type': 'application/json', 'X-Access-Token': token },
           body: JSON.stringify(body)
         });
 
         if (!resp.ok) {
-          const errText = await resp.text();
-          addMsg('assistant', '出错了：' + errText);
-          console.error('HTTP', resp.status, errText);
+          const msg = resp.status === 401 ? '访问密码错误'
+                    : resp.status === 429 ? '请求过于频繁，请稍后再试'
+                    : `服务器错误 ${resp.status}`;
+          addMsg('assistant', '❌ ' + msg);
+          console.error('HTTP', resp.status, await resp.text());
           return;
         }
 
@@ -285,17 +317,16 @@
         chat.messages.push({ role:"user", content:text });
         chat.messages.push({ role:"assistant", content });
 
-        // 伪流式逐字显示
-        const botBubble = addMsg('assistant', '');
-        await typeWrite(botBubble, content, 8);
+        const bubble = addMsg('assistant', '');
+        await typeWrite(bubble, content, 6);
 
-        persist();
-        renderList(); // 可能更新了标题
+        persist(); renderList();
       } catch (e) {
-        addMsg('assistant', '出错了：' + (e.message || e));
+        addMsg('assistant', '❌ 网络异常或跨域失败：' + (e.message || e));
         console.error(e);
       } finally {
         sendBtn.disabled = false;
+        sendBtn.textContent = oldSendText;
       }
     }
   </script>
