@@ -2,376 +2,287 @@
 <html lang="zh-CN">
 <head>
   <meta charset="utf-8" />
-  <title>我的 AI 聊天 - api.awaker.top</title>
+  <title>AI Chat</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
-    :root { --bg:#f7f7f8; --card:#fff; --border:#eaeaea; --text:#111; --muted:#888; --primary:#111; }
-    *{box-sizing:border-box}
-    body { font-family: -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial; margin:0; color:var(--text); background:var(--bg);}
-    .app { display:flex; min-height:100vh; }
+    :root {
+      --bg: #f5f5f7;
+      --card: #ffffff;
+      --border: #e5e5e5;
+      --text: #111;
+      --muted: #777;
+      --primary: #10a37f;
+      --bubble-user: #dff5ec;
+      --bubble-bot: #f2f2f2;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--bg);
+      font-family: -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, sans-serif;
+      color: var(--text);
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
 
-    .sidebar { width:260px; border-right:1px solid var(--border); background:#fafafa; padding:12px; display:flex; flex-direction:column; gap:8px; }
-    .sidebar h2{font-size:14px;margin:8px 4px;color:#444}
-    .chat-item{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:#fff;cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:8px}
-    .chat-item.active{border-color:#000}
-    .chat-title{flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
-    .chat-actions{display:flex; gap:6px}
-    .icon-btn{border:1px solid var(--border); background:#fff; border-radius:8px; padding:4px 6px; cursor:pointer}
-    .icon-btn:hover{background:#f2f2f2}
+    /* 顶部导航 */
+    .topbar {
+      height: 56px;
+      background: white;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      position: sticky;
+      top: 0;
+      z-index: 20;
+    }
+    .topbar-title {
+      font-weight: 600;
+      font-size: 17px;
+    }
+    .topbar-right {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
 
-    .btn { padding:8px 10px; border-radius:10px; border:1px solid var(--border); background:#fff; cursor:pointer }
-    .btn.primary { background:var(--primary); color:#fff; border-color:var(--primary) }
-    .btn:disabled{opacity:.6;cursor:not-allowed}
-    .row { display:flex; gap:8px }
-    .muted { color:var(--muted); font-size:12px; }
+    /* 主体布局 */
+    .container {
+      flex: 1;
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 20px;
+      display: flex;
+      flex-direction: column;
+    }
+    .chat-box {
+      flex: 1;
+      overflow-y: auto;
+      padding-bottom: 20px;
+    }
 
-    .main { flex:1; display:flex; flex-direction:column; min-width:0; }
-    .topbar { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--border); background:#fff; position:sticky; top:0; z-index:5}
-    .topbar .left, .topbar .right { display:flex; gap:8px; align-items:center }
-    select, input[type="password"] { padding:8px 10px; border-radius:10px; border:1px solid var(--border) }
+    /* 消息气泡 */
+    .msg {
+      margin: 14px 0;
+      display: flex;
+    }
+    .msg.user { justify-content: flex-end; }
+    .msg.bot { justify-content: flex-start; }
 
-    .wrap { max-width:900px; margin:0 auto; padding:12px; width:100% }
-    .card { background:var(--card); border:1px solid var(--border); border-radius:12px; display:flex; flex-direction:column; height: calc(100vh - 140px); }
+    .bubble {
+      max-width: 75%;
+      padding: 12px 14px;
+      border-radius: 14px;
+      white-space: pre-wrap;
+      line-height: 1.6;
+    }
+    .user .bubble {
+      background: var(--bubble-user);
+      border: 1px solid #cde7dc;
+    }
+    .bot .bubble {
+      background: var(--bubble-bot);
+      border: 1px solid #e6e6e6;
+      position: relative;
+    }
 
-    .chat-box { flex:1; overflow-y:auto; padding:16px; }
-    .msg { margin:10px 0; line-height:1.7; position:relative; }
-    .msg .bubble { display:inline-block; padding:10px 12px; border-radius:12px; white-space:pre-wrap; max-width:100%; }
-    .msg.user { text-align:right; }
-    .msg.user .bubble { background:#e6f0ff; }
-    .msg.bot .bubble { background:#f1f1f1; }
-    .copy-btn{ position:absolute; right:0; top:-6px; font-size:12px; color:#666; cursor:pointer; padding:2px 6px; border-radius:6px; border:1px solid var(--border); background:#fff; }
-    .copy-btn:hover{background:#f2f2f2}
+    /* 复制按钮 */
+    .copy-btn {
+      position: absolute;
+      right: -5px;
+      top: -8px;
+      background: white;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 11px;
+      padding: 2px 6px;
+      cursor: pointer;
+    }
 
-    .composer { display:flex; gap:8px; padding:12px; border-top:1px solid var(--border) }
-    textarea { flex:1; resize:vertical; min-height:68px; padding:10px; border-radius:10px; border:1px solid var(--border); font-size:16px; }
-    .send-btn { min-width:110px }
+    /* 底部输入框 */
+    .composer {
+      display: flex;
+      gap: 10px;
+      padding: 16px;
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      border-radius: 16px 16px 0 0;
+    }
+    textarea {
+      flex: 1;
+      resize: none;
+      min-height: 60px;
+      padding: 12px;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      font-size: 16px;
+    }
+    .btn-primary {
+      background: var(--primary);
+      color: white;
+      border: none;
+      padding: 0 18px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-weight: 500;
+    }
 
-    @media (max-width: 900px){
-      .sidebar{ display:none; }
-      .card{ height: calc(100vh - 120px); }
+    /* 输入框固定到底部 */
+    .bottom-area {
+      position: sticky;
+      bottom: 0;
+      background: var(--bg);
+      padding-bottom: 10px;
     }
   </style>
 </head>
 <body>
-  <div class="app">
 
-    <!-- 左侧：聊天列表 -->
-    <aside class="sidebar">
-      <div class="row">
-        <button class="btn primary" id="newChatBtn">新建聊天</button>
-        <button class="btn" id="exportBtn">导出对话</button>
-      </div>
-      <div class="row">
-        <button class="btn" id="logoutBtn">退出登录</button>
-        <button class="btn" id="settingsBtn">设置</button>
-      </div>
-      <h2>你的聊天</h2>
-      <div id="chatList"></div>
-    </aside>
+  <!-- 顶部导航 -->
+  <div class="topbar">
+    <div class="topbar-title">AI Chat</div>
+    <div class="topbar-right">
+      <input id="token" type="password" placeholder="访问密码" style="padding:6px 10px;border-radius:8px;border:1px solid var(--border);" />
+      <button id="saveToken" class="btn-primary" style="padding:6px 12px;">保存</button>
+    </div>
+  </div>
 
-    <!-- 右侧：主界面 -->
-    <main class="main">
-      <div class="topbar">
-        <div class="left">
-          <strong>api.awaker.top</strong>
-          <span class="muted">OpenAI 兼容 / 通义 · 真流式</span>
-          <label class="muted">模型</label>
-          <select id="modelSel">
-            <option value="qwen-plus">qwen-plus</option>
-            <option value="qwen-max">qwen-max</option>
-          </select>
-        </div>
-        <div class="right">
-          <input id="token" type="password" placeholder="访问密码（此窗口有效）" />
-          <button class="btn" id="saveToken">保存密码</button>
-        </div>
-      </div>
+  <!-- 主容器 -->
+  <div class="container">
 
-      <div class="wrap">
-        <div class="card">
-          <div id="chat" class="chat-box"></div>
-          <div class="composer">
-            <textarea id="input" placeholder="输入你的问题，Shift+Enter换行，Enter发送"></textarea>
-            <button class="btn primary send-btn" id="send">发送</button>
-          </div>
-        </div>
-        <div class="muted" style="margin-top:8px">
-          当前为通义 OpenAI 兼容接口 + SSE 真流式输出。
-        </div>
+    <div id="chat" class="chat-box"></div>
+
+    <!-- 输入框 -->
+    <div class="bottom-area">
+      <div class="composer">
+        <textarea id="input" placeholder="输入你的问题，Enter发送，Shift+Enter换行"></textarea>
+        <button class="btn-primary" id="send">发送</button>
       </div>
-    </main>
+    </div>
   </div>
 
   <script>
-    // === DOM ===
     const chatEl = document.getElementById('chat');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
     const tokenEl = document.getElementById('token');
     const saveTokenBtn = document.getElementById('saveToken');
-    const modelSel = document.getElementById('modelSel');
-    const chatListEl = document.getElementById('chatList');
-    const newChatBtn = document.getElementById('newChatBtn');
-    const exportBtn = document.getElementById('exportBtn');
-    const logoutBtn = document.getElementById('logoutBtn');
-    const settingsBtn = document.getElementById('settingsBtn');
 
-    // === 存储键 ===
-    const LS_CHATS = 'AIOPS_CHATS';
-    const LS_MODEL = 'AIOPS_MODEL';
-    const SS_TOKEN = 'CHAT_ACCESS_TOKEN';
+    const SS_TOKEN = "CHAT_ACCESS_TOKEN";
 
-    // === 数据 ===
-    const systemMsg = { role: "system", content: "你是一个有帮助的中文助手。" };
-    let chats = loadChats();
-    let currentId = chats[0]?.id || null;
+    // 加载保存的 token
+    tokenEl.value = sessionStorage.getItem(SS_TOKEN) || "";
 
-    function uuid() { return 'c'+Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    saveTokenBtn.onclick = () => {
+      const v = tokenEl.value.trim();
+      if (!v) return alert("请输入访问密码！");
+      sessionStorage.setItem(SS_TOKEN, v);
+      alert("已保存");
+    };
 
-    function loadChats() {
-      try {
-        const raw = localStorage.getItem(LS_CHATS);
-        return raw ? JSON.parse(raw) : [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
-      } catch (e) {
-        console.error("parse chats failed", e);
-        return [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
-      }
-    }
-
-    function getCurrent() { return chats.find(c => c.id === currentId); }
-
-    function persist() {
-      localStorage.setItem(LS_CHATS, JSON.stringify(chats));
-      localStorage.setItem(LS_MODEL, modelSel.value);
-    }
-
-    function renderList() {
-      chatListEl.innerHTML = '';
-      chats.forEach(c => {
-        const item = document.createElement('div');
-        item.className = 'chat-item' + (c.id===currentId ? ' active':'');
-        const title = document.createElement('div');
-        title.className = 'chat-title';
-        title.textContent = c.title || '未命名对话';
-        title.ondblclick = () => {
-          const val = prompt('修改标题：', c.title || '');
-          if (val !== null) { c.title = val.trim() || c.title; persist(); renderList(); }
-        };
-        const actions = document.createElement('div');
-        actions.className = 'chat-actions';
-        const del = document.createElement('button');
-        del.className = 'icon-btn';
-        del.title = '删除';
-        del.textContent = '🗑';
-        del.onclick = (e) => {
-          e.stopPropagation();
-          if (confirm('确定删除该对话？')) {
-            chats = chats.filter(x => x.id !== c.id);
-            if (currentId === c.id) currentId = chats[0]?.id || null;
-            persist(); renderList(); renderChat();
-          }
-        };
-        actions.appendChild(del);
-
-        item.onclick = () => { currentId = c.id; renderList(); renderChat(); };
-        item.appendChild(title);
-        item.appendChild(actions);
-        chatListEl.appendChild(item);
-      });
-      if (!chats.length) {
-        const d = document.createElement('div');
-        d.className='muted';
-        d.textContent='暂无聊天，点“新建聊天”开始';
-        chatListEl.appendChild(d);
-      }
-    }
-
-    function renderChat() {
-      chatEl.innerHTML = '';
-      const c = getCurrent();
-      if (!c) return;
-      c.messages.filter(m => m.role !== "system").forEach(m => addMsg(m.role, m.content));
-    }
-
+    // 添加消息到界面
     function addMsg(role, text) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+      const div = document.createElement("div");
+      div.className = "msg " + (role === "user" ? "user" : "bot");
 
-      const b = document.createElement('div');
-      b.className = 'bubble';
-      b.textContent = text;
-      div.appendChild(b);
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = text;
+      div.appendChild(bubble);
 
-      if (role !== 'user') {
-        const copy = document.createElement('button');
-        copy.className = 'copy-btn';
-        copy.textContent = '复制';
+      // bot 添加复制按钮
+      if (role !== "user") {
+        const copy = document.createElement("button");
+        copy.className = "copy-btn";
+        copy.textContent = "复制";
         copy.onclick = () => {
-          const liveText = b.textContent || '';
-          navigator.clipboard.writeText(liveText).then(()=>{
-            copy.textContent='已复制';
-            setTimeout(()=>copy.textContent='复制',1200);
-          });
+          navigator.clipboard.writeText(bubble.textContent);
+          copy.textContent = "已复制";
+          setTimeout(() => copy.textContent = "复制", 1200);
         };
         div.appendChild(copy);
       }
 
       chatEl.appendChild(div);
       chatEl.scrollTop = chatEl.scrollHeight;
-      return b;
+      return bubble;
     }
 
-    // 初始回填
-    tokenEl.value = sessionStorage.getItem(SS_TOKEN) || '';
-    modelSel.value = localStorage.getItem(LS_MODEL) || 'qwen-plus';
-    renderList(); if (currentId) renderChat();
-
-    // 事件绑定
-    newChatBtn.onclick = () => {
-      const id = uuid();
-      chats.unshift({ id, title:"新的聊天", messages:[systemMsg], created:Date.now() });
-      currentId = id; persist(); renderList(); renderChat();
-    };
-
-    exportBtn.onclick = () => {
-      const c = getCurrent(); if (!c) return;
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c,null,2));
-      const a = document.createElement('a');
-      a.href = dataStr; a.download = (c.title || 'chat') + '.json'; a.click();
-    };
-
-    logoutBtn.onclick = () => {
-      sessionStorage.removeItem(SS_TOKEN);
-      tokenEl.value = '';
-      alert('已清除当前窗口的访问密码');
-    };
-
-    settingsBtn.onclick = () => alert('设置占位：后续可添加主题 / 快捷键 / 温度等参数');
-
-    saveTokenBtn.onclick = () => {
-      const v = tokenEl.value.trim();
-      if (!v) return alert('请输入访问密码');
-      sessionStorage.setItem(SS_TOKEN, v);
-      alert('已保存（仅当前窗口有效）');
-    };
-
-    modelSel.onchange = () => persist();
-
-    inputEl.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && !e.shiftKey) {
+    // 发送
+    sendBtn.onclick = send;
+    inputEl.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
         e.preventDefault();
         send();
       }
     });
-    sendBtn.onclick = () => send();
 
     async function send() {
       const text = inputEl.value.trim();
       if (!text) return;
 
-      const token = (tokenEl.value || sessionStorage.getItem(SS_TOKEN) || '').trim();
-      if (!token) return alert('请先填写并保存访问密码');
+      const token = tokenEl.value.trim();
+      if (!token) return alert("请先填写访问密码");
 
-      const chat = getCurrent(); if (!chat) return;
+      inputEl.value = "";
+      addMsg("user", text);
 
-      inputEl.value = '';
-      addMsg('user', text);
-
-      if (!chat.title || chat.title === '新的聊天') {
-        chat.title = text.slice(0, 20);
-      }
-
-      const model = modelSel.value || 'qwen-plus';
-
-      const baseBody = {
-        model,
-        messages: [...chat.messages, { role:"user", content:text }],
-        temperature: 0.7,
-        stream: true   // 永远流式
+      const body = {
+        model: "qwen-plus",
+        messages: [{ role:"user", content:text }],
+        stream: true
       };
 
-      // Loading
-      sendBtn.disabled = true;
-      const oldSendText = sendBtn.textContent;
-      sendBtn.textContent = '流式生成中…';
+      const resp = await fetch("/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Access-Token": token
+        },
+        body: JSON.stringify(body)
+      });
 
-      try {
-        const resp = await fetch('/api/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'X-Access-Token': token
-          },
-          body: JSON.stringify(baseBody)
-        });
+      const reader = resp.body.getReader();
+      const decoder = new TextDecoder("utf-8");
 
-        if (!resp.ok || !resp.body) {
-          const msg = resp.status === 401 ? '访问密码错误'
-                    : resp.status === 429 ? '请求过于频繁，请稍后再试'
-                    : `服务器错误 ${resp.status}`;
-          addMsg('assistant', '❌ ' + msg);
-          console.error('HTTP', resp.status, await resp.text().catch(()=>'')); 
-          return;
-        }
+      let buffer = "";
+      let finalText = "";
 
-        const reader = resp.body.getReader();
-        const decoder = new TextDecoder('utf-8');
+      const bubble = addMsg("bot", "");
 
-        let buffer = '';
-        let finalText = '';
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
 
-        // 先画一个气泡，边收边加字
-        const botBubble = addMsg('assistant', '');
+        buffer += decoder.decode(value, { stream: true });
+        const events = buffer.split("\n\n");
+        buffer = events.pop() || "";
 
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          buffer += decoder.decode(value, { stream: true });
+        for (const evt of events) {
+          const lines = evt.split("\n");
+          for (const line of lines) {
+            if (!line.startsWith("data:")) continue;
 
-          buffer = buffer.replace(/\r\n/g, '\n');
-          const events = buffer.split('\n\n');
-          buffer = events.pop() || '';
+            const data = line.slice(5).trim();
+            if (data === "[DONE]") return;
 
-          for (const evt of events) {
-            const lines = evt.split('\n');
-            for (const line of lines) {
-              const s = line.trim();
-              if (!s.startsWith('data:')) continue;
-              const data = s.slice(5).trim();
-              if (!data) continue;
-              if (data === '[DONE]') {
-                buffer = '';
-                break;
+            try {
+              const json = JSON.parse(data);
+              const piece = json?.choices?.[0]?.delta?.content || "";
+              if (piece) {
+                finalText += piece;
+                bubble.textContent += piece;
+                chatEl.scrollTop = chatEl.scrollHeight;
               }
-              try {
-                const json = JSON.parse(data);
-                const choice = json?.choices?.[0];
-                const delta = choice?.delta;
-                const piece = delta?.content ?? choice?.message?.content ?? '';
-                if (piece) {
-                  finalText += piece;
-                  botBubble.textContent += piece;
-                  chatEl.scrollTop = chatEl.scrollHeight;
-                }
-              } catch (e) {
-                // 忽略非 JSON / 半截 JSON
-              }
-            }
+            } catch {}
           }
         }
-
-        chat.messages.push({ role:"user", content:text });
-        chat.messages.push({ role:"assistant", content: finalText || '[无内容]' });
-        persist(); renderList();
-
-      } catch (e) {
-        addMsg('assistant', '❌ 网络异常或跨域失败：' + (e.message || e));
-        console.error(e);
-      } finally {
-        sendBtn.disabled = false;
-        sendBtn.textContent = oldSendText;
       }
     }
   </script>
+
 </body>
 </html>
