@@ -1,7 +1,8 @@
 {
   "name": "ai-proxy",
-  "type": "module",
-  "dependencies": {
-    "undici": "^6.0.0"
+  "version": "1.0.0",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js"
   }
 }
