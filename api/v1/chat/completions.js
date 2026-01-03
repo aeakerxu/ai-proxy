@@ -38,9 +38,12 @@ export default async function handler(req, res) {
       model = "qwen-plus",
       messages = [],
       temperature,
-      top_p,
-      stream = false
+      top_p
+      // 👍 stream 不再从 body 读取（强制开启）
     } = req.body || {};
+
+    // 🔥 强制默认 stream = true
+    const stream = true;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: "messages is required (array)" });
@@ -51,13 +54,14 @@ export default async function handler(req, res) {
       model,
       input: { messages }
     };
+
     if (temperature !== undefined || top_p !== undefined) {
       dashBody.parameters = {};
       if (temperature !== undefined) dashBody.parameters.temperature = temperature;
       if (top_p !== undefined) dashBody.parameters.top_p = top_p;
     }
 
-    // 请求通义（此步先用非流式拿到完整文本；下一步再接“上游流式”）
+    // 上游一次性结果（目前 DashScope 的 Chat 依旧非流式）
     const upstream = await fetch(
       "https://dashscope.aliyuncs.com/api/v1/services/aigc/text-generation/generation",
       {
@@ -90,26 +94,9 @@ export default async function handler(req, res) {
         ((usage?.input_tokens || 0) + (usage?.output_tokens || 0))
     };
 
-    if (!stream) {
-      // 一次性返回 OpenAI 兼容响应
-      const resp = {
-        id: raw?.request_id || `chatcmpl_${Date.now()}`,
-        object: "chat.completion",
-        created: Math.floor(Date.now() / 1000),
-        model,
-        choices: [
-          {
-            index: 0,
-            finish_reason: raw?.output?.finish_reason || "stop",
-            message: { role: "assistant", content: fullText }
-          }
-        ],
-        usage: usageObj
-      };
-      return res.status(200).json(resp);
-    }
-
-    // ===== stream === true：SSE =====
+    // ============
+    // 🚀 流式输出（默认强制开启）
+    // ============
     res.writeHead(200, {
       "Content-Type": "text/event-stream; charset=utf-8",
       "Cache-Control": "no-cache, no-transform",
@@ -117,12 +104,11 @@ export default async function handler(req, res) {
       ...CORS_HEADERS
     });
 
-    // 工具：写一条 SSE 数据
     const send = (obj) => {
       res.write(`data: ${JSON.stringify(obj)}\n\n`);
     };
 
-    // OpenAI SSE 规范：先发一个框架消息（可选）
+    // OPENAI 流式首包（role）
     send({
       id: raw?.request_id || `chatcmpl_${Date.now()}`,
       object: "chat.completion.chunk",
@@ -131,8 +117,8 @@ export default async function handler(req, res) {
       choices: [{ index: 0, delta: { role: "assistant" }, finish_reason: null }]
     });
 
-    // 将完整文本切片逐段发送（把“管线打通”，体验接近真流式）
-    const chunkSize = 40; // 每块字数，可按需调整
+    // 分段切片模拟 OpenAI 真流式
+    const chunkSize = 40;
     for (let i = 0; i < fullText.length; i += chunkSize) {
       const piece = fullText.slice(i, i + chunkSize);
       send({
@@ -144,7 +130,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 收尾：发送停用标记，再附加 usage
+    // 收尾 stop
     send({
       id: raw?.request_id || `chatcmpl_${Date.now()}`,
       object: "chat.completion.chunk",
@@ -154,12 +140,11 @@ export default async function handler(req, res) {
       usage: usageObj
     });
 
-    // OpenAI 风格结尾
     res.write("data: [DONE]\n\n");
     res.end();
+
   } catch (e) {
     try {
-      // 若是流式已开始，按 SSE 错误格式返回
       res.write(`data: ${JSON.stringify({ error: e?.message || String(e) })}\n\n`);
       res.write("data: [DONE]\n\n");
       res.end();
