@@ -1,3 +1,7 @@
+export const config = {
+  runtime: "nodejs"
+};
+
 // OpenAI 兼容 Chat Completions，支持 stream=true 的 SSE（服务端推送）
 // 依赖环境变量：DASHSCOPE_API_KEY（通义的一串 Key）
 // 保留自用鉴权：请求头 X-Access-Token 必须等于 CHAT_ACCESS_TOKEN
