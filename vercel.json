@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "api/**/*.[jt]s": {
+      "runtime": "nodejs20.x",
+      "maxDuration": 30
+    }
+  }
+}
