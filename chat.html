@@ -23,6 +23,11 @@
 <body>
   <div class="wrap">
     <h1>我的 AI 聊天（基于 api.awaker.top）</h1>
+        <div class="row" style="margin-bottom:8px;">
+      <input id="token" type="password" placeholder="输入访问密码（一次即可）" style="flex:1; padding:10px; border-radius:10px; border:1px solid #ddd;" />
+      <button id="saveToken">保存密码</button>
+    </div>
+
     <div id="chat" class="chat"></div>
     <div class="row">
       <textarea id="input" placeholder="输入你的问题，按发送"></textarea>
@@ -92,6 +97,101 @@
         send();
       }
     });
+      <script>
+    const chat = document.getElementById('chat');
+    const input = document.getElementById('input');
+    const sendBtn = document.getElementById('send');
+
+    // 新增：密码输入与保存
+    const tokenInput = document.getElementById('token');
+    const saveTokenBtn = document.getElementById('saveToken');
+
+    // 从本地读取已保存的密码（可选）
+    const saved = localStorage.getItem('CHAT_ACCESS_TOKEN') || '';
+    if (saved) tokenInput.value = saved;
+
+    saveTokenBtn.addEventListener('click', () => {
+      const v = tokenInput.value.trim();
+      if (!v) { alert('请输入访问密码'); return; }
+      localStorage.setItem('CHAT_ACCESS_TOKEN', v);
+      alert('已保存');
+    });
+
+    const messages = [
+      { role: "system", content: "你是一个有帮助的中文助手。" }
+    ];
+
+    function addMsg(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      b.textContent = text;
+      div.appendChild(b);
+      chat.appendChild(div);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+    async function send() {
+      const text = input.value.trim();
+      if (!text) return;
+
+      const token = tokenInput.value.trim() || localStorage.getItem('CHAT_ACCESS_TOKEN') || '';
+      if (!token) {
+        alert('请先填写并保存访问密码');
+        return;
+      }
+
+      input.value = '';
+      addMsg('user', text);
+      sendBtn.disabled = true;
+
+      const body = {
+        model: "qwen-plus",
+        messages: [
+          ...messages,
+          { role: "user", content: text }
+        ],
+        temperature: 0.7
+      };
+
+      try {
+        const resp = await fetch('/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Access-Token': token   // 关键：把密码放到请求头
+          },
+          body: JSON.stringify(body)
+        });
+
+        if (!resp.ok) {
+          const errText = await resp.text();
+          addMsg('assistant', '出错了：' + errText);
+          return;
+        }
+
+        const data = await resp.json();
+        const content = data?.choices?.[0]?.message?.content || '[无内容]';
+        messages.push({ role: "user", content: text });
+        messages.push({ role: "assistant", content });
+        addMsg('assistant', content);
+      } catch (e) {
+        addMsg('assistant', '出错了：' + (e.message || e));
+      } finally {
+        sendBtn.disabled = false;
+      }
+    }
+
+    sendBtn.addEventListener('click', send);
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        send();
+      }
+    });
+  </script>
+
   </script>
 </body>
 </html>
