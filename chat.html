@@ -74,14 +74,12 @@
       <div class="topbar">
         <div class="left">
           <strong>api.awaker.top</strong>
-          <span class="muted">OpenAI 兼容 / 通义</span>
-
+          <span class="muted">OpenAI 兼容 / 通义 · 真流式</span>
           <label class="muted">模型</label>
           <select id="modelSel">
             <option value="qwen-plus">qwen-plus</option>
             <option value="qwen-max">qwen-max</option>
           </select>
-
         </div>
         <div class="right">
           <input id="token" type="password" placeholder="访问密码（此窗口有效）" />
@@ -97,16 +95,15 @@
             <button class="btn primary send-btn" id="send">发送</button>
           </div>
         </div>
-
         <div class="muted" style="margin-top:8px">
-          当前已启用 <strong>真实 SSE 流式</strong>，效果与 ChatGPT 完全一致。
+          当前为通义 OpenAI 兼容接口 + SSE 真流式输出。
         </div>
       </div>
     </main>
   </div>
 
   <script>
-    /* ===== 工具与 DOM ===== */
+    // === DOM ===
     const chatEl = document.getElementById('chat');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
@@ -119,271 +116,262 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const settingsBtn = document.getElementById('settingsBtn');
 
-    /* ===== 本地存储键 ===== */
+    // === 存储键 ===
     const LS_CHATS = 'AIOPS_CHATS';
     const LS_MODEL = 'AIOPS_MODEL';
     const SS_TOKEN = 'CHAT_ACCESS_TOKEN';
 
-    /* ===== 数据结构 ===== */
+    // === 数据 ===
     const systemMsg = { role: "system", content: "你是一个有帮助的中文助手。" };
+    let chats = loadChats();
+    let currentId = chats[0]?.id || null;
 
-    function uuid() {
-      return 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
-    }
+    function uuid() { return 'c'+Math.random().toString(36).slice(2)+Date.now().toString(36); }
 
     function loadChats() {
       try {
         const raw = localStorage.getItem(LS_CHATS);
-        return raw ? JSON.parse(raw) : [
-          { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() }
-        ];
+        return raw ? JSON.parse(raw) : [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
       } catch (e) {
-        return [
-          { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() }
-        ];
+        console.error("parse chats failed", e);
+        return [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
       }
     }
 
-    let chats = loadChats();
-    let currentId = chats[0]?.id || null;
-
-    function getCurrent() {
-      return chats.find(c => c.id === currentId);
-    }
+    function getCurrent() { return chats.find(c => c.id === currentId); }
 
     function persist() {
       localStorage.setItem(LS_CHATS, JSON.stringify(chats));
       localStorage.setItem(LS_MODEL, modelSel.value);
     }
 
-    /* ===== 渲染 UI ===== */
     function renderList() {
       chatListEl.innerHTML = '';
       chats.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'chat-item' + (c.id === currentId ? ' active' : '');
-
+        item.className = 'chat-item' + (c.id===currentId ? ' active':'');
         const title = document.createElement('div');
         title.className = 'chat-title';
-        title.textContent = c.title;
-
-        const del = document.createElement('button');
-        del.className = 'icon-btn';
-        del.textContent = '🗑';
-        del.onclick = e => {
-          e.stopPropagation();
-          if (confirm('要删除这个对话吗？')) {
-            chats = chats.filter(x => x.id !== c.id);
-            currentId = chats[0]?.id || null;
-            persist();
-            renderList();
-            renderChat();
-          }
+        title.textContent = c.title || '未命名对话';
+        title.ondblclick = () => {
+          const val = prompt('修改标题：', c.title || '');
+          if (val !== null) { c.title = val.trim() || c.title; persist(); renderList(); }
         };
-
         const actions = document.createElement('div');
         actions.className = 'chat-actions';
+        const del = document.createElement('button');
+        del.className = 'icon-btn';
+        del.title = '删除';
+        del.textContent = '🗑';
+        del.onclick = (e) => {
+          e.stopPropagation();
+          if (confirm('确定删除该对话？')) {
+            chats = chats.filter(x => x.id !== c.id);
+            if (currentId === c.id) currentId = chats[0]?.id || null;
+            persist(); renderList(); renderChat();
+          }
+        };
         actions.appendChild(del);
 
-        item.onclick = () => {
-          currentId = c.id;
-          renderList();
-          renderChat();
-        };
-
+        item.onclick = () => { currentId = c.id; renderList(); renderChat(); };
         item.appendChild(title);
         item.appendChild(actions);
         chatListEl.appendChild(item);
       });
-    }
-
-    function addMsg(role, content) {
-      const div = document.createElement('div');
-      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
-
-      const bubble = document.createElement('div');
-      bubble.className = 'bubble';
-      bubble.textContent = content;
-      div.appendChild(bubble);
-
-      if (role !== 'user') {
-        const btn = document.createElement('button');
-        btn.className = 'copy-btn';
-        btn.textContent = '复制';
-        btn.onclick = () => {
-          navigator.clipboard.writeText(bubble.textContent);
-          btn.textContent = '已复制';
-          setTimeout(() => btn.textContent = '复制', 1200);
-        };
-        div.appendChild(btn);
+      if (!chats.length) {
+        const d = document.createElement('div');
+        d.className='muted';
+        d.textContent='暂无聊天，点“新建聊天”开始';
+        chatListEl.appendChild(d);
       }
-
-      chatEl.appendChild(div);
-      chatEl.scrollTop = chatEl.scrollHeight;
-      return bubble;
     }
 
     function renderChat() {
       chatEl.innerHTML = '';
       const c = getCurrent();
       if (!c) return;
-      c.messages
-       .filter(m => m.role !== 'system')
-       .forEach(m => addMsg(m.role, m.content));
+      c.messages.filter(m => m.role !== "system").forEach(m => addMsg(m.role, m.content));
     }
 
-    /* ===== 初始化 ===== */
+    function addMsg(role, text) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+
+      const b = document.createElement('div');
+      b.className = 'bubble';
+      b.textContent = text;
+      div.appendChild(b);
+
+      if (role !== 'user') {
+        const copy = document.createElement('button');
+        copy.className = 'copy-btn';
+        copy.textContent = '复制';
+        copy.onclick = () => {
+          const liveText = b.textContent || '';
+          navigator.clipboard.writeText(liveText).then(()=>{
+            copy.textContent='已复制';
+            setTimeout(()=>copy.textContent='复制',1200);
+          });
+        };
+        div.appendChild(copy);
+      }
+
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return b;
+    }
+
+    // 初始回填
     tokenEl.value = sessionStorage.getItem(SS_TOKEN) || '';
     modelSel.value = localStorage.getItem(LS_MODEL) || 'qwen-plus';
-    renderList(); renderChat();
+    renderList(); if (currentId) renderChat();
 
-    /* ===== 事件绑定 ===== */
+    // 事件绑定
     newChatBtn.onclick = () => {
       const id = uuid();
-      chats.unshift({ id, title: "新的聊天", messages: [systemMsg], created: Date.now() });
-      currentId = id;
-      persist();
-      renderList();
-      renderChat();
+      chats.unshift({ id, title:"新的聊天", messages:[systemMsg], created:Date.now() });
+      currentId = id; persist(); renderList(); renderChat();
     };
 
     exportBtn.onclick = () => {
-      const c = getCurrent();
-      if (!c) return;
+      const c = getCurrent(); if (!c) return;
+      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c,null,2));
       const a = document.createElement('a');
-      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c, null, 2));
-      a.download = (c.title || 'chat') + '.json';
-      a.click();
+      a.href = dataStr; a.download = (c.title || 'chat') + '.json'; a.click();
     };
 
     logoutBtn.onclick = () => {
       sessionStorage.removeItem(SS_TOKEN);
       tokenEl.value = '';
-      alert('已清除访问密码');
+      alert('已清除当前窗口的访问密码');
     };
 
-    settingsBtn.onclick = () => {
-      alert('此处可扩展设置功能');
-    };
+    settingsBtn.onclick = () => alert('设置占位：后续可添加主题 / 快捷键 / 温度等参数');
 
     saveTokenBtn.onclick = () => {
       const v = tokenEl.value.trim();
-      if (!v) return alert('请输入密码');
+      if (!v) return alert('请输入访问密码');
       sessionStorage.setItem(SS_TOKEN, v);
-      alert('已保存');
+      alert('已保存（仅当前窗口有效）');
     };
 
-    inputEl.addEventListener('keydown', e => {
+    modelSel.onchange = () => persist();
+
+    inputEl.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         send();
       }
     });
-
     sendBtn.onclick = () => send();
 
-    /* ===== 核心：发送消息（永远走 SSE 流式） ===== */
     async function send() {
       const text = inputEl.value.trim();
       if (!text) return;
 
-      const token = tokenEl.value.trim() || sessionStorage.getItem(SS_TOKEN);
-      if (!token) return alert('请先输入访问密码');
+      const token = (tokenEl.value || sessionStorage.getItem(SS_TOKEN) || '').trim();
+      if (!token) return alert('请先填写并保存访问密码');
 
-      const chat = getCurrent();
-      if (!chat) return;
+      const chat = getCurrent(); if (!chat) return;
 
       inputEl.value = '';
       addMsg('user', text);
 
-      if (!chat.title || chat.title === "新的聊天") {
+      if (!chat.title || chat.title === '新的聊天') {
         chat.title = text.slice(0, 20);
       }
 
-      const model = modelSel.value;
+      const model = modelSel.value || 'qwen-plus';
 
-      const body = {
+      const baseBody = {
         model,
-        messages: [...chat.messages, { role: "user", content: text }],
+        messages: [...chat.messages, { role:"user", content:text }],
         temperature: 0.7,
-        stream: true
+        stream: true   // 永远流式
       };
 
+      // Loading
       sendBtn.disabled = true;
-      const oldText = sendBtn.textContent;
-      sendBtn.textContent = "生成中…";
+      const oldSendText = sendBtn.textContent;
+      sendBtn.textContent = '流式生成中…';
 
       try {
         const resp = await fetch('/api/v1/chat/completions', {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
-            'X-Access-Token': token,
+            'X-Access-Token': token
           },
-          body: JSON.stringify(body)
+          body: JSON.stringify(baseBody)
         });
 
         if (!resp.ok || !resp.body) {
-          addMsg('assistant', "❌ 服务器异常");
+          const msg = resp.status === 401 ? '访问密码错误'
+                    : resp.status === 429 ? '请求过于频繁，请稍后再试'
+                    : `服务器错误 ${resp.status}`;
+          addMsg('assistant', '❌ ' + msg);
+          console.error('HTTP', resp.status, await resp.text().catch(()=>'')); 
           return;
         }
 
         const reader = resp.body.getReader();
-        const decoder = new TextDecoder();
+        const decoder = new TextDecoder('utf-8');
 
-        let buffer = "";
-        let finalText = "";
+        let buffer = '';
+        let finalText = '';
 
-        const bubble = addMsg('assistant', "");
+        // 先画一个气泡，边收边加字
+        const botBubble = addMsg('assistant', '');
 
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-
           buffer += decoder.decode(value, { stream: true });
 
-          const events = buffer.split("\n\n");
-          buffer = events.pop() || "";
+          buffer = buffer.replace(/\r\n/g, '\n');
+          const events = buffer.split('\n\n');
+          buffer = events.pop() || '';
 
           for (const evt of events) {
-            const lines = evt.split("\n");
+            const lines = evt.split('\n');
             for (const line of lines) {
-              if (!line.startsWith("data:")) continue;
-              const data = line.slice(5).trim();
+              const s = line.trim();
+              if (!s.startsWith('data:')) continue;
+              const data = s.slice(5).trim();
               if (!data) continue;
-
-              if (data === "[DONE]") break;
-
+              if (data === '[DONE]') {
+                buffer = '';
+                break;
+              }
               try {
                 const json = JSON.parse(data);
-                const piece =
-                  json?.choices?.[0]?.delta?.content ||
-                  "";
-
+                const choice = json?.choices?.[0];
+                const delta = choice?.delta;
+                const piece = delta?.content ?? choice?.message?.content ?? '';
                 if (piece) {
                   finalText += piece;
-                  bubble.textContent += piece;
+                  botBubble.textContent += piece;
                   chatEl.scrollTop = chatEl.scrollHeight;
                 }
-              } catch {}
+              } catch (e) {
+                // 忽略非 JSON / 半截 JSON
+              }
             }
           }
         }
 
-        // 存档
-        chat.messages.push({ role: "user", content: text });
-        chat.messages.push({ role: "assistant", content: finalText });
-        persist();
-        renderList();
+        chat.messages.push({ role:"user", content:text });
+        chat.messages.push({ role:"assistant", content: finalText || '[无内容]' });
+        persist(); renderList();
 
       } catch (e) {
-        addMsg('assistant', "❌ 网络错误");
+        addMsg('assistant', '❌ 网络异常或跨域失败：' + (e.message || e));
+        console.error(e);
       } finally {
         sendBtn.disabled = false;
-        sendBtn.textContent = oldText;
+        sendBtn.textContent = oldSendText;
       }
     }
-
   </script>
 </body>
 </html>
