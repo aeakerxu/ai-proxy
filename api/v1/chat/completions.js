@@ -8,6 +8,14 @@ const CORS_HEADERS = {
 };
 
 export default async function handler(req, res) {
+    // --- 自用鉴权 ---
+  const clientToken = req.headers["x-access-token"] || req.headers["authorization"];
+  const serverToken = process.env.CHAT_ACCESS_TOKEN;
+
+  if (!clientToken || clientToken !== serverToken) {
+    return res.status(401).json({ error: "Unauthorized: invalid or missing access token" });
+  }
+
   // 处理 CORS 预检
   if (req.method === "OPTIONS") {
     Object.entries(CORS_HEADERS).forEach(([k, v]) => res.setHeader(k, v));
