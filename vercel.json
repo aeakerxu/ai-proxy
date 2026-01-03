@@ -1,4 +1,5 @@
 {
+  "version": 2,
   "functions": {
     "api/**/*.[jt]s": {
       "runtime": "nodejs18.x"
