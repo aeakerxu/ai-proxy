@@ -80,6 +80,10 @@
             <option value="qwen-plus">qwen-plus</option>
             <option value="qwen-max">qwen-max</option>
           </select>
+                    <label class="muted" style="margin-left:4px;">
+            <input type="checkbox" id="streamToggle" checked>
+            流式
+          </label>
         </div>
         <div class="right">
           <input id="token" type="password" placeholder="访问密码（此窗口有效）" />
@@ -271,6 +275,7 @@
     sendBtn.onclick = () => send();
 
     async function send() {
+          async function send() {
       const text = inputEl.value.trim();
       if (!text) return;
 
@@ -285,6 +290,147 @@
       // 首条消息更新标题
       if (!chat.title || chat.title === '新的聊天') {
         chat.title = text.slice(0, 20);
+      }
+
+      const model = modelSel.value || 'qwen-plus';
+      const wantStream = document.getElementById('streamToggle')?.checked;
+
+      // 统一的请求体
+      const baseBody = {
+        model,
+        messages: [...chat.messages, { role:"user", content:text }],
+        temperature: 0.7
+      };
+
+      // Loading 状态
+      sendBtn.disabled = true;
+      const oldSendText = sendBtn.textContent;
+      sendBtn.textContent = wantStream ? '流式生成中…' : '思考中…';
+
+      try {
+        if (!wantStream) {
+          // ------- 非流式：一次性 JSON -------
+          const resp = await fetch('/api/v1/chat/completions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'X-Access-Token': token },
+            body: JSON.stringify(baseBody)
+          });
+
+          if (!resp.ok) {
+            const msg = resp.status === 401 ? '访问密码错误'
+                      : resp.status === 429 ? '请求过于频繁，请稍后再试'
+                      : `服务器错误 ${resp.status}`;
+            addMsg('assistant', '❌ ' + msg);
+            console.error('HTTP', resp.status, await resp.text());
+            return;
+          }
+
+          const data = await resp.json();
+          const content = data?.choices?.[0]?.message?.content || '[无内容]';
+
+          chat.messages.push({ role:"user", content:text });
+          chat.messages.push({ role:"assistant", content });
+
+          const bubble = addMsg('assistant', '');
+          await typeWrite(bubble, content, 6);
+
+          persist(); renderList();
+          return;
+        }
+
+        // ------- 真流式：SSE -------
+        const resp = await fetch('/api/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Access-Token': token
+          },
+          body: JSON.stringify({ ...baseBody, stream: true })
+        });
+
+        if (!resp.ok || !resp.body) {
+          const msg = resp.status === 401 ? '访问密码错误'
+                    : resp.status === 429 ? '请求过于频繁，请稍后再试'
+                    : `服务器错误 ${resp.status}`;
+          addMsg('assistant', '❌ ' + msg);
+          console.error('HTTP', resp.status, await resp.text().catch(()=>'')); 
+          return;
+        }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder('utf-8');
+        let buffer = '';
+        let finalText = '';
+        let roleEmitted = false;
+
+        // 先画一个空气泡，后面边读边追加
+        const botBubble = addMsg('assistant', '');
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          buffer += decoder.decode(value, { stream: true });
+
+          // SSE 分帧：按换行切
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || ''; // 剩下一半等下次补齐
+
+          for (const line of lines) {
+            const s = line.trim();
+            if (!s) continue;
+            if (!s.startsWith('data:')) continue;
+
+            const data = s.slice(5).trim(); // 去掉 "data:"
+            if (data === '[DONE]') {
+              buffer = ''; // 清空缓冲
+              break;
+            }
+
+            // 兼容 OpenAI 风格的 chunk
+            try {
+              const json = JSON.parse(data);
+
+              const choice = json?.choices?.[0];
+              if (!choice) continue;
+
+              // 有的首包是 {delta:{role:"assistant"}}
+              const delta = choice.delta || {};
+              if (delta.role && !roleEmitted) {
+                roleEmitted = true;
+              }
+
+              const piece = delta.content || '';
+              if (piece) {
+                finalText += piece;
+                botBubble.textContent += piece; // 关键：真正边读边追加
+                chatEl.scrollTop = chatEl.scrollHeight;
+              }
+
+              // 最后一包 finish_reason=stop
+              if (choice.finish_reason === 'stop') {
+                // usage 可能在最后包出现（如果后端带上了）
+                // const usage = json.usage;
+              }
+            } catch (e) {
+              // 可能是服务端错误消息：data: {"error":"..."}
+              console.warn('parse chunk fail:', e, s);
+            }
+          }
+        }
+
+        // SSE 结束：把消息写入会话记录
+        chat.messages.push({ role:"user", content:text });
+        chat.messages.push({ role:"assistant", content: finalText || '[无内容]' });
+        persist(); renderList();
+
+      } catch (e) {
+        addMsg('assistant', '❌ 网络异常或跨域失败：' + (e.message || e));
+        console.error(e);
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = oldSendText;
+      }
+    }
       }
 
       const model = modelSel.value || 'qwen-plus';
