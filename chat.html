@@ -75,15 +75,13 @@
         <div class="left">
           <strong>api.awaker.top</strong>
           <span class="muted">OpenAI 兼容 / 通义</span>
+
           <label class="muted">模型</label>
           <select id="modelSel">
             <option value="qwen-plus">qwen-plus</option>
             <option value="qwen-max">qwen-max</option>
           </select>
-                    <label class="muted" style="margin-left:4px;">
-            <input type="checkbox" id="streamToggle" checked>
-            流式
-          </label>
+
         </div>
         <div class="right">
           <input id="token" type="password" placeholder="访问密码（此窗口有效）" />
@@ -99,15 +97,16 @@
             <button class="btn primary send-btn" id="send">发送</button>
           </div>
         </div>
+
         <div class="muted" style="margin-top:8px">
-          说明：当前为“伪流式”（前端逐字显示）。如需真流式（SSE），第二阶段改后端即可。
+          当前已启用 <strong>真实 SSE 流式</strong>，效果与 ChatGPT 完全一致。
         </div>
       </div>
     </main>
   </div>
 
   <script>
-    // === DOM ===
+    /* ===== 工具与 DOM ===== */
     const chatEl = document.getElementById('chat');
     const inputEl = document.getElementById('input');
     const sendBtn = document.getElementById('send');
@@ -120,323 +119,270 @@
     const logoutBtn = document.getElementById('logoutBtn');
     const settingsBtn = document.getElementById('settingsBtn');
 
-    // === 存储键 ===
+    /* ===== 本地存储键 ===== */
     const LS_CHATS = 'AIOPS_CHATS';
     const LS_MODEL = 'AIOPS_MODEL';
-    // 密码默认存 sessionStorage：关闭页面即失效（更安全）
     const SS_TOKEN = 'CHAT_ACCESS_TOKEN';
 
-    // === 数据 ===
-    let chats = loadChats();
-    let currentId = chats[0]?.id || null;
+    /* ===== 数据结构 ===== */
     const systemMsg = { role: "system", content: "你是一个有帮助的中文助手。" };
 
-    function uuid() { return 'c'+Math.random().toString(36).slice(2)+Date.now().toString(36); }
+    function uuid() {
+      return 'c' + Math.random().toString(36).slice(2) + Date.now().toString(36);
+    }
 
     function loadChats() {
       try {
         const raw = localStorage.getItem(LS_CHATS);
-        return raw ? JSON.parse(raw) : [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
+        return raw ? JSON.parse(raw) : [
+          { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() }
+        ];
       } catch (e) {
-        console.error("parse chats failed", e);
-        return [ { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() } ];
+        return [
+          { id: uuid(), title: "新的聊天", messages: [systemMsg], created: Date.now() }
+        ];
       }
     }
 
-    function getCurrent() { return chats.find(c => c.id === currentId); }
+    let chats = loadChats();
+    let currentId = chats[0]?.id || null;
+
+    function getCurrent() {
+      return chats.find(c => c.id === currentId);
+    }
 
     function persist() {
       localStorage.setItem(LS_CHATS, JSON.stringify(chats));
       localStorage.setItem(LS_MODEL, modelSel.value);
     }
 
+    /* ===== 渲染 UI ===== */
     function renderList() {
       chatListEl.innerHTML = '';
       chats.forEach(c => {
         const item = document.createElement('div');
-        item.className = 'chat-item' + (c.id===currentId ? ' active':'');
+        item.className = 'chat-item' + (c.id === currentId ? ' active' : '');
+
         const title = document.createElement('div');
         title.className = 'chat-title';
-        title.textContent = c.title || '未命名对话';
-        title.ondblclick = () => {
-          const val = prompt('修改标题：', c.title || '');
-          if (val !== null) { c.title = val.trim() || c.title; persist(); renderList(); }
-        };
-        const actions = document.createElement('div');
-        actions.className = 'chat-actions';
+        title.textContent = c.title;
+
         const del = document.createElement('button');
         del.className = 'icon-btn';
-        del.title = '删除';
         del.textContent = '🗑';
-        del.onclick = (e) => {
+        del.onclick = e => {
           e.stopPropagation();
-          if (confirm('确定删除该对话？')) {
+          if (confirm('要删除这个对话吗？')) {
             chats = chats.filter(x => x.id !== c.id);
-            if (currentId === c.id) currentId = chats[0]?.id || null;
-            persist(); renderList(); renderChat();
+            currentId = chats[0]?.id || null;
+            persist();
+            renderList();
+            renderChat();
           }
         };
+
+        const actions = document.createElement('div');
+        actions.className = 'chat-actions';
         actions.appendChild(del);
 
-        item.onclick = () => { currentId = c.id; renderList(); renderChat(); };
+        item.onclick = () => {
+          currentId = c.id;
+          renderList();
+          renderChat();
+        };
+
         item.appendChild(title);
         item.appendChild(actions);
         chatListEl.appendChild(item);
       });
-      if (!chats.length) {
-        const d = document.createElement('div');
-        d.className='muted';
-        d.textContent='暂无聊天，点“新建聊天”开始';
-        chatListEl.appendChild(d);
+    }
+
+    function addMsg(role, content) {
+      const div = document.createElement('div');
+      div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
+
+      const bubble = document.createElement('div');
+      bubble.className = 'bubble';
+      bubble.textContent = content;
+      div.appendChild(bubble);
+
+      if (role !== 'user') {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = '复制';
+        btn.onclick = () => {
+          navigator.clipboard.writeText(bubble.textContent);
+          btn.textContent = '已复制';
+          setTimeout(() => btn.textContent = '复制', 1200);
+        };
+        div.appendChild(btn);
       }
+
+      chatEl.appendChild(div);
+      chatEl.scrollTop = chatEl.scrollHeight;
+      return bubble;
     }
 
     function renderChat() {
       chatEl.innerHTML = '';
       const c = getCurrent();
       if (!c) return;
-      c.messages.filter(m => m.role !== "system").forEach(m => addMsg(m.role, m.content));
+      c.messages
+       .filter(m => m.role !== 'system')
+       .forEach(m => addMsg(m.role, m.content));
     }
 
-    function addMsg(role, text) {
-  const div = document.createElement('div');
-  div.className = 'msg ' + (role === 'user' ? 'user' : 'bot');
-
-  const b = document.createElement('div');
-  b.className = 'bubble';
-  b.textContent = text; // 保留换行（配合 CSS）
-  div.appendChild(b);
-
-  // 助手消息：复制按钮（复制实时内容）
-  if (role !== 'user') {
-    const copy = document.createElement('button');
-    copy.className = 'copy-btn';
-    copy.textContent = '复制';
-    copy.onclick = () => {
-      const liveText = b.textContent || '';
-      navigator.clipboard.writeText(liveText).then(()=>{
-        copy.textContent='已复制';
-        setTimeout(()=>copy.textContent='复制',1200);
-      });
-    };
-    div.appendChild(copy);
-  }
-
-  chatEl.appendChild(div);
-  chatEl.scrollTop = chatEl.scrollHeight;
-  return b;
-}
-
-    async function typeWrite(el, text, speed=8) {
-      el.textContent = '';
-      for (let i=0;i<text.length;i++){
-        el.textContent += text[i];
-        await new Promise(r=>setTimeout(r, speed));
-      }
-    }
-
-    // 初始回填
+    /* ===== 初始化 ===== */
     tokenEl.value = sessionStorage.getItem(SS_TOKEN) || '';
     modelSel.value = localStorage.getItem(LS_MODEL) || 'qwen-plus';
-    renderList(); if (currentId) renderChat();
+    renderList(); renderChat();
 
-    // 事件
-    document.getElementById('newChatBtn').onclick = () => {
+    /* ===== 事件绑定 ===== */
+    newChatBtn.onclick = () => {
       const id = uuid();
-      chats.unshift({ id, title:"新的聊天", messages:[systemMsg], created:Date.now() });
-      currentId = id; persist(); renderList(); renderChat();
+      chats.unshift({ id, title: "新的聊天", messages: [systemMsg], created: Date.now() });
+      currentId = id;
+      persist();
+      renderList();
+      renderChat();
     };
 
-    document.getElementById('exportBtn').onclick = () => {
-      const c = getCurrent(); if (!c) return;
-      const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c,null,2));
+    exportBtn.onclick = () => {
+      const c = getCurrent();
+      if (!c) return;
       const a = document.createElement('a');
-      a.href = dataStr; a.download = (c.title || 'chat') + '.json'; a.click();
+      a.href = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(c, null, 2));
+      a.download = (c.title || 'chat') + '.json';
+      a.click();
     };
 
-    document.getElementById('logoutBtn').onclick = () => {
+    logoutBtn.onclick = () => {
       sessionStorage.removeItem(SS_TOKEN);
       tokenEl.value = '';
-      alert('已清除当前窗口的访问密码');
+      alert('已清除访问密码');
     };
 
-    settingsBtn.onclick = () => alert('设置占位：后续可添加主题 / 快捷键 / 温度等参数');
+    settingsBtn.onclick = () => {
+      alert('此处可扩展设置功能');
+    };
 
     saveTokenBtn.onclick = () => {
       const v = tokenEl.value.trim();
-      if (!v) return alert('请输入访问密码');
+      if (!v) return alert('请输入密码');
       sessionStorage.setItem(SS_TOKEN, v);
-      alert('已保存（仅当前窗口有效）');
+      alert('已保存');
     };
 
-    modelSel.onchange = () => persist();
-
-    inputEl.addEventListener('keydown', (e) => {
+    inputEl.addEventListener('keydown', e => {
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         send();
       }
     });
+
     sendBtn.onclick = () => send();
 
+    /* ===== 核心：发送消息（永远走 SSE 流式） ===== */
     async function send() {
-  const text = inputEl.value.trim();
-  if (!text) return;
+      const text = inputEl.value.trim();
+      if (!text) return;
 
-  const token = (tokenEl.value || sessionStorage.getItem(SS_TOKEN) || '').trim();
-  if (!token) return alert('请先填写并保存访问密码');
+      const token = tokenEl.value.trim() || sessionStorage.getItem(SS_TOKEN);
+      if (!token) return alert('请先输入访问密码');
 
-  const chat = getCurrent(); if (!chat) return;
+      const chat = getCurrent();
+      if (!chat) return;
 
-  inputEl.value = '';
-  addMsg('user', text);
+      inputEl.value = '';
+      addMsg('user', text);
 
-  // 首条消息更新标题
-  if (!chat.title || chat.title === '新的聊天') {
-    chat.title = text.slice(0, 20);
-  }
-
-  const model = modelSel.value || 'qwen-plus';
-  const wantStream = document.getElementById('streamToggle')?.checked;
-
-  // 统一请求体
-  const baseBody = {
-    model,
-    messages: [...chat.messages, { role:"user", content:text }],
-    temperature: 0.7
-  };
-
-  // Loading
-  sendBtn.disabled = true;
-  const oldSendText = sendBtn.textContent;
-  sendBtn.textContent = wantStream ? '流式生成中…' : '思考中…';
-
-  try {
-    if (!wantStream) {
-      // ===== 非流式：一次性 JSON =====
-      const resp = await fetch('/api/v1/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Access-Token': token },
-        body: JSON.stringify(baseBody)
-      });
-
-      if (!resp.ok) {
-        const msg = resp.status === 401 ? '访问密码错误'
-                  : resp.status === 429 ? '请求过于频繁，请稍后再试'
-                  : `服务器错误 ${resp.status}`;
-        addMsg('assistant', '❌ ' + msg);
-        console.error('HTTP', resp.status, await resp.text());
-        return;
+      if (!chat.title || chat.title === "新的聊天") {
+        chat.title = text.slice(0, 20);
       }
 
-      const data = await resp.json();
-      const content = data?.choices?.[0]?.message?.content || '[无内容]';
+      const model = modelSel.value;
 
-      chat.messages.push({ role:"user", content:text });
-      chat.messages.push({ role:"assistant", content });
+      const body = {
+        model,
+        messages: [...chat.messages, { role: "user", content: text }],
+        temperature: 0.7,
+        stream: true
+      };
 
-      const bubble = addMsg('assistant', '');
-      await typeWrite(bubble, content, 6);
-
-      persist(); renderList();
-      return;
-    }
-
-    // ===== 真流式：SSE =====
-    const resp = await fetch('/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Access-Token': token
-      },
-      body: JSON.stringify({ ...baseBody, stream: true })
-    });
-
-    if (!resp.ok || !resp.body) {
-      const msg = resp.status === 401 ? '访问密码错误'
-                : resp.status === 429 ? '请求过于频繁，请稍后再试'
-                : `服务器错误 ${resp.status}`;
-      addMsg('assistant', '❌ ' + msg);
-      console.error('HTTP', resp.status, await resp.text().catch(()=>'')); 
-      return;
-    }
-
-const reader = resp.body.getReader();
-const decoder = new TextDecoder('utf-8');
-
-let buffer = '';
-let finalText = '';
-let doneFlag = false;
-
-// 先画一个空气泡，边读边追加
-const botBubble = addMsg('assistant', '');
-
-while (!doneFlag) {
-  const { done, value } = await reader.read();
-  if (done) break;
-
-  buffer += decoder.decode(value, { stream: true });
-
-  // 统一处理 \r\n
-  buffer = buffer.replace(/\r\n/g, '\n');
-
-  // SSE 标准分隔：事件以 "\n\n" 分隔
-  const events = buffer.split('\n\n');
-  buffer = events.pop() || '';
-
-  for (const evt of events) {
-    const lines = evt.split('\n');
-
-    for (const line of lines) {
-      const s = line.trim();
-      if (!s.startsWith('data:')) continue;
-
-      const data = s.slice(5).trim();
-      if (!data) continue;
-
-      if (data === '[DONE]') {
-        doneFlag = true;
-        break;
-      }
+      sendBtn.disabled = true;
+      const oldText = sendBtn.textContent;
+      sendBtn.textContent = "生成中…";
 
       try {
-        const json = JSON.parse(data);
-        const choice = json?.choices?.[0];
-        const delta = choice?.delta;
+        const resp = await fetch('/api/v1/chat/completions', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'X-Access-Token': token,
+          },
+          body: JSON.stringify(body)
+        });
 
-        const piece =
-          delta?.content ??
-          choice?.message?.content ??
-          '';
-
-        if (piece) {
-          finalText += piece;
-          botBubble.textContent += piece;
-          chatEl.scrollTop = chatEl.scrollHeight;
+        if (!resp.ok || !resp.body) {
+          addMsg('assistant', "❌ 服务器异常");
+          return;
         }
+
+        const reader = resp.body.getReader();
+        const decoder = new TextDecoder();
+
+        let buffer = "";
+        let finalText = "";
+
+        const bubble = addMsg('assistant', "");
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+
+          const events = buffer.split("\n\n");
+          buffer = events.pop() || "";
+
+          for (const evt of events) {
+            const lines = evt.split("\n");
+            for (const line of lines) {
+              if (!line.startsWith("data:")) continue;
+              const data = line.slice(5).trim();
+              if (!data) continue;
+
+              if (data === "[DONE]") break;
+
+              try {
+                const json = JSON.parse(data);
+                const piece =
+                  json?.choices?.[0]?.delta?.content ||
+                  "";
+
+                if (piece) {
+                  finalText += piece;
+                  bubble.textContent += piece;
+                  chatEl.scrollTop = chatEl.scrollHeight;
+                }
+              } catch {}
+            }
+          }
+        }
+
+        // 存档
+        chat.messages.push({ role: "user", content: text });
+        chat.messages.push({ role: "assistant", content: finalText });
+        persist();
+        renderList();
+
       } catch (e) {
-        // 忽略心跳/非 JSON/半截 JSON 的情况
+        addMsg('assistant', "❌ 网络错误");
+      } finally {
+        sendBtn.disabled = false;
+        sendBtn.textContent = oldText;
       }
     }
-
-    if (doneFlag) break;
-  }
-}
-
-
-    // 收尾：落库并更新列表
-    chat.messages.push({ role:"user", content:text });
-    chat.messages.push({ role:"assistant", content: finalText || '[无内容]' });
-    persist(); renderList();
-
-  } catch (e) {
-    addMsg('assistant', '❌ 网络异常或跨域失败：' + (e.message || e));
-    console.error(e);
-  } finally {
-    sendBtn.disabled = false;
-    sendBtn.textContent = oldSendText;
-  }
-}
 
   </script>
 </body>
